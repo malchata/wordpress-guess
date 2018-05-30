@@ -1,9 +1,12 @@
 <?php
 
 global $wpdb;
-DEFINE('GUESS_JS_PREDICTIONS_TABLE', $wpdb->prefix . 'guess_js_predictions');
-DEFINE('GUESS_JS_PAGEVIEWS_TABLE', $wpdb->prefix . 'guess_js_pageviews');
-DEFINE('GUESS_JS_USER_FLOWS_TABLE', $wpdb->prefix . 'guess_js_user_flows');
+define( 'GUESS_JS_PREDICTIONS_TABLE', $wpdb->prefix . 'guess_js_predictions' );
+define( 'GUESS_JS_PAGEVIEWS_TABLE', $wpdb->prefix . 'guess_js_pageviews' );
+define( 'GUESS_JS_USER_FLOWS_TABLE', $wpdb->prefix . 'guess_js_user_flows' );
+define( 'GUESS_JS_OPTIONS_VIEW_ID', 'guess_js_view_id' );
+define( 'GUESS_JS_OPTIONS_CREDENTIALS', 'guess_js_credentials' );
+define( 'GUESS_JS_CREDENTIALS_FILE', dirname( __FILE__ ) . DIRECTORY_SEPARATOR . 'credentials.json' );
 
 /**
  * The plugin bootstrap file

@@ -35,6 +35,12 @@ class Guess_Js_Deactivator {
 		$wpdb->query( "DROP TABLE IF EXISTS " . GUESS_JS_PREDICTIONS_TABLE );
 		$wpdb->query( "DROP TABLE IF EXISTS " . GUESS_JS_PAGEVIEWS_TABLE );
 		$wpdb->query( "DROP TABLE IF EXISTS " . GUESS_JS_USER_FLOWS_TABLE );
+		delete_option ( GUESS_JS_OPTIONS_VIEW_ID );
+		delete_option ( GUESS_JS_OPTIONS_CREDENTIALS );
+
+		if ( file_exists ( GUESS_JS_CREDENTIALS_FILE ) ){
+			unlink( GUESS_JS_CREDENTIALS_FILE );
+		}
 	}
 
 }

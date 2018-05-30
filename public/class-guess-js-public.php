@@ -102,14 +102,8 @@ class Guess_Js_Public {
 	}
 
 	public function should_prefetch( $request, $prediction ) {
-		if ( is_null( $prediction ) || $save_data === true ) {
+		if ( is_null( $prediction ) || ( isset( $_SERVER['HTTP_SAVE_DATA'] ) && strtolower( $_SERVER['HTTP_SAVE_DATA'] ) === 'on' ) ) {
 			return false;
-		}
-
-		$save_data = false;
-
-		if ( isset( $_SERVER['HTTP_SAVE_DATA'] ) && strtolower( $_SERVER['HTTP_SAVE_DATA'] ) === 'on' ) {
-			$save_data = true;
 		}
 
 		$certainty_thresholds_by_connection_type = array(
@@ -194,7 +188,7 @@ class Guess_Js_Public {
 						)
 					);
 
-					$response->set_status(201);
+					$response->set_status(200);
 					return $response;
 				}
 			) );

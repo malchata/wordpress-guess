@@ -1,7 +1,6 @@
 <?php
 
 // Include Google API stuff
-putenv( 'GOOGLE_APPLICATION_CREDENTIALS=' . dirname( __FILE__ ) . DIRECTORY_SEPARATOR . 'credentials.json' ); // Hardcoding this is a baaad idea, and needs to be done some other way.
 require_once( dirname( dirname( __FILE__ ) ) . DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php' );
 
 /**
@@ -62,15 +61,6 @@ class Guess_Js {
 	protected $version;
 
 	/**
-	 * The view ID of the Google Analytics collection
-	 *
-	 * @since		1.0.0
-	 * @access	 protected
-	 * @var			int		$view_id		The view ID of the Google Analytics collection
-	 */
-	protected $view_id;
-
-	/**
 	 * Define the core functionality of the plugin
 	 *
 	 * Set the plugin name and the plugin version that can be used throughout the plugin.
@@ -81,7 +71,6 @@ class Guess_Js {
 	 */
 	public function __construct() {
 		global $wpdb;
-		$wpdb->show_errors();
 
 		if ( defined( 'PLUGIN_NAME_VERSION' ) ) {
 			$this->version = PLUGIN_NAME_VERSION;
@@ -94,13 +83,6 @@ class Guess_Js {
 		$this->set_locale();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
-
-		// This is hardcoded and should be exposed to an admin interface at some point
-		$this->view_id = '89465509';
-
-		// Calling this ad hoc for now, but this should be invoked via the admin panel or something.
-		// $this->generate_predictions();
-		// die;
 	}
 
 	/**
@@ -233,188 +215,5 @@ class Guess_Js {
 	 */
 	public function get_version() {
 		return $this->version;
-	}
-
-	/**
-	 * Generate prefetch predictions
-	 *
-	 * @since		 1.0.0
-	 * @return		string		The version number of the plugin.
-	 */
-	public function generate_predictions() {
-		// Connect to the API and service account
-		$client = new Google_Client();
-		$client->useApplicationDefaultCredentials();
-		$client->setScopes( 'https://www.googleapis.com/auth/analytics.readonly' );
-		$analyticsReporting = new Google_Service_AnalyticsReporting($client);
-
-		// Create the DateRange object
-		$dateRange = new Google_Service_AnalyticsReporting_DateRange();
-		$dateRange->setStartDate( '30daysAgo' );
-		$dateRange->setEndDate( 'yesterday' );
-
-		// Create the Metrics object
-		$pageviews = new Google_Service_AnalyticsReporting_Metric();
-		$pageviews->setExpression( 'ga:pageviews' );
-		$pageviews->setAlias( 'Pageviews' );
-		$exits = new Google_Service_AnalyticsReporting_Metric();
-		$exits->setExpression( 'ga:exits' );
-		$exits->setAlias( 'Page Exits' );
-
-		// Create the Dimensions object
-		$previousPagePath = new Google_Service_AnalyticsReporting_Dimension();
-		$previousPagePath->setName( 'ga:previousPagePath' );
-		$pagePath = new Google_Service_AnalyticsReporting_Dimension();
-		$pagePath->setName( 'ga:pagePath' );
-
-		// Set proper sort parameters
-		$primarySort = new Google_Service_AnalyticsReporting_OrderBy();
-		$primarySort->setOrderType( 'VALUE' );
-		$primarySort->setFieldName( 'ga:previousPagePath' );
-		$primarySort->setSortOrder( 'ASCENDING' );
-		$secondarySort = new Google_Service_AnalyticsReporting_OrderBy();
-		$secondarySort->setOrderType( 'VALUE' );
-		$secondarySort->setFieldName( 'ga:pageviews' );
-		$secondarySort->setSortOrder( 'DESCENDING' );
-
-		// Create the ReportRequest object
-		$request = new Google_Service_AnalyticsReporting_ReportRequest();
-		$request->setViewId( $this->view_id );
-		$request->setDateRanges( array( $dateRange ) );
-		$request->setDimensions( array( $previousPagePath, $pagePath ) );
-		$request->setMetrics( array( $pageviews, $exits ) );
-		$request->setOrderBys( array ( $primarySort, $secondarySort ) );
-		$request->setPageSize( '10000' );
-
-		$body = new Google_Service_AnalyticsReporting_GetReportsRequest();
-		$body->setReportRequests( array( $request ) );
-		$report = $analyticsReporting->reports->batchGet( $body );
-
-		$this->parse_data( $report->reports );
-	}
-
-	/**
-	 * Parse data from the predictions
-	 *
-	 * @since		 1.0.0
-	 * @return		string		The version number of the plugin.
-	 */
-	public function parse_data( $reports ) {
-		$report = $reports;
-		$rows = $report[0]->data->rows;
-		$data = [];
-		$pages = [];
-
-		foreach ( $rows as $row ) {
-			$previousPagePath = $row->dimensions[0];
-			$pagePath = $row->dimensions[1];
-			$pageviews = $row->metrics[0]->values[0];
-			$exits = $row->metrics[0]->values[1];
-
-			if ( preg_match( '/\?.*$/', $pagePath ) || preg_match( '/\?.*$/', $previousPagePath ) ) {
-				$pagePath = preg_replace( '/\?.*$/', '', $pagePath );
-				$previousPagePath = preg_replace( '/\?.*$/', '', $previousPagePath );
-			}
-
-			if ( $previousPagePath == $pagePath ) {
-				continue;
-			}
-
-			if ( $previousPagePath != '(entrance)' ) {
-				if ( !isset( $data[$previousPagePath] ) ) {
-					$data[$previousPagePath] = new StdClass;
-					$data[$previousPagePath]->pagePath = $previousPagePath;
-					$data[$previousPagePath]->pageviews = 0;
-					$data[$previousPagePath]->exits = 0;
-					$data[$previousPagePath]->nextPageviews = 0;
-					$data[$previousPagePath]->nextExits = 0;
-					$data[$previousPagePath]->nextPages = new StdClass;
-				} else {
-					$data[$previousPagePath] = $data[$previousPagePath];
-				}
-
-				$data[$previousPagePath]->nextPageviews += $pageviews;
-				$data[$previousPagePath]->nextExits += $exits;
-
-				if ( property_exists( $data[$previousPagePath]->nextPages, $pagePath ) ) {
-					$data[$previousPagePath]->nextPages->{$pagePath} += $pageviews;
-				} else {
-					$data[$previousPagePath]->nextPages->{$pagePath} = $pageviews;
-				}
-			}
-
-			if ( !isset( $data[$pagePath] ) ) {
-				$data[$pagePath] = new StdClass;
-				$data[$pagePath]->pagePath = $pagePath;
-				$data[$pagePath]->pageviews = 0;
-				$data[$pagePath]->exits = 0;
-				$data[$pagePath]->nextPageviews = 0;
-				$data[$pagePath]->nextExits = 0;
-				$data[$pagePath]->nextPages = new StdClass;
-			} else {
-				$data[$pagePath] = $data[$pagePath];
-			}
-
-			$data[$pagePath]->pageviews += $pageviews;
-			$data[$pagePath]->exits += $exits;
-		}
-
-		foreach ( $data as $page ) {
-			$nextPages = array();
-
-			foreach ( $page->nextPages as $pagePath => $pageviews ) {
-				$nextPageObj = new StdClass;
-				$nextPageObj->pagePath = $pagePath;
-				$nextPageObj->pageviews = $pageviews;
-				array_push( $nextPages, $nextPageObj );
-			}
-
-			usort ( $nextPages, function( $a, $b ) {
-				if ( $a->pageviews == $b->pageviews ) {
-					return 0;
-				}
-
-				return ( $a->pageviews < $b->pageviews ) ? 1 : -1;
-			} );
-
-			$page->nextPages = $nextPages;
-		}
-
-		$data = array_filter( $data, function( $var ) {
-			return $var->nextPageviews > 0;
-		} );
-
-		foreach ( $data as $page ) {
-			$page->percentExits = $page->exits / ( $page->exits + $page->nextPageviews );
-			$page->topNextPageProbability = $page->nextPages[0]->pageviews / ( $page->exits + $page->nextPageviews );
-			array_push( $pages, $page );
-		}
-
-		$this->save_pages_to_database( $pages );
-	}
-
-	public function save_pages_to_database( $pages ) {
-		global $wpdb;
-
-		foreach ( $pages as $page ) {
-			$row = $wpdb->get_row( 'SELECT * FROM ' . GUESS_JS_PREDICTIONS_TABLE . ' WHERE prediction_page_path=\'' . $page->pagePath . '\'' );
-
-			if( is_null( $row ) ) {
-				$wpdb->insert( GUESS_JS_PREDICTIONS_TABLE, array(
-					'prediction_id' => 0,
-					'prediction_page_path' => $page->pagePath,
-					'prediction_next_page_certainty' => $page->topNextPageProbability,
-					'prediction_next_page_path' => $page->nextPages[0]->pagePath
-				) );
-			} else {
-				$wpdb->update( GUESS_JS_PREDICTIONS_TABLE, array(
-					'prediction_page_path' => $page->pagePath,
-					'prediction_next_page_certainty' => $page->topNextPageProbability,
-					'prediction_next_page_path' => $page->nextPages[0]->pagePath
-				), array(
-					'prediction_id' => $row->prediction_id
-				) );
-			}
-		}
 	}
 }
